@@ -9,7 +9,6 @@ data/raw/*
 data/processed/*
 !data/processed/.gitkeep
 *.csv
-*.npz
 
 # OS / editor
 .DS_Store
