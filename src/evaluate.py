@@ -8,7 +8,9 @@ import torch
 from sklearn.metrics import average_precision_score, precision_recall_curve
 
 from src.train_baseline import MLPBaseline
-from src.train_gru import GRUClassifier
+from src.train_gru import GRUClassifier as GRUBaseClassifier
+from src.train_gru_sampler import GRUClassifier as GRUSamplerClassifier
+from src.train_tcn_sampler import TCNClassifier
 
 
 ROOT = Path(".")
@@ -72,7 +74,6 @@ def load_baseline():
         saved_metrics = json.load(f)
 
     threshold = float(saved_metrics["chosen_threshold_from_val"])
-
     model = MLPBaseline(input_dim=X_test.shape[1])
 
     return model, checkpoint_path, X_test, y_test, threshold, "baseline"
@@ -93,7 +94,7 @@ def load_gru():
     threshold = float(saved_metrics["chosen_threshold_from_val"])
     hidden_dim = int(saved_metrics.get("hidden_dim", 64))
 
-    model = GRUClassifier(
+    model = GRUBaseClassifier(
         input_dim=X_test.shape[2],
         hidden_dim=hidden_dim,
         num_layers=1,
@@ -103,11 +104,60 @@ def load_gru():
     return model, checkpoint_path, X_test, y_test, threshold, "gru"
 
 
+def load_gru_sampler():
+    data_path = PROCESSED_DIR / "gru_test_w10.npz"
+    metrics_path = RESULTS_DIR / "gru_sampler" / "metrics.json"
+    checkpoint_path = RESULTS_DIR / "gru_sampler" / "best_model.pt"
+
+    data = np.load(data_path)
+    X_test = data["X"].astype(np.float32)
+    y_test = data["y"].astype(np.int64)
+
+    with open(metrics_path, "r", encoding="utf-8") as f:
+        saved_metrics = json.load(f)
+
+    threshold = float(saved_metrics["chosen_threshold_from_val"])
+    hidden_dim = int(saved_metrics.get("hidden_dim", 64))
+
+    model = GRUSamplerClassifier(
+        input_dim=X_test.shape[2],
+        hidden_dim=hidden_dim,
+        num_layers=1,
+        dropout=0.2,
+    )
+
+    return model, checkpoint_path, X_test, y_test, threshold, "gru_sampler"
+
+
+def load_tcn_sampler():
+    data_path = PROCESSED_DIR / "gru_test_w10.npz"
+    metrics_path = RESULTS_DIR / "tcn_sampler" / "metrics.json"
+    checkpoint_path = RESULTS_DIR / "tcn_sampler" / "best_model.pt"
+
+    data = np.load(data_path)
+    X_test = data["X"].astype(np.float32)
+    y_test = data["y"].astype(np.int64)
+
+    with open(metrics_path, "r", encoding="utf-8") as f:
+        saved_metrics = json.load(f)
+
+    threshold = float(saved_metrics["chosen_threshold_from_val"])
+    channels = int(saved_metrics.get("channels", 64))
+
+    model = TCNClassifier(
+        input_dim=X_test.shape[2],
+        channels=channels,
+        dropout=0.2,
+    )
+
+    return model, checkpoint_path, X_test, y_test, threshold, "tcn_sampler"
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--model",
-        choices=["baseline", "gru"],
+        choices=["baseline", "gru", "gru_sampler", "tcn_sampler"],
         required=True,
         help="Which saved model to evaluate.",
     )
@@ -115,8 +165,12 @@ def main():
 
     if args.model == "baseline":
         model, checkpoint_path, X_test, y_test, threshold, model_name = load_baseline()
-    else:
+    elif args.model == "gru":
         model, checkpoint_path, X_test, y_test, threshold, model_name = load_gru()
+    elif args.model == "gru_sampler":
+        model, checkpoint_path, X_test, y_test, threshold, model_name = load_gru_sampler()
+    else:
+        model, checkpoint_path, X_test, y_test, threshold, model_name = load_tcn_sampler()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -135,6 +189,7 @@ def main():
     threshold_metrics = metrics_at_threshold(y_test, y_prob, threshold)
 
     out_dir = RESULTS_DIR / model_name
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     reproduced_metrics = {
         "model": model_name,
