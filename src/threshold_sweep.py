@@ -8,6 +8,7 @@ import pandas as pd
 RESULTS_DIR = Path("results")
 OUT_DIR = RESULTS_DIR / "comparison"
 
+MODELS = ["baseline", "gru", "gru_sampler", "tcn_sampler"]
 DEFAULT_THRESHOLDS = [0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90]
 
 
@@ -57,7 +58,6 @@ def load_model_outputs(model_name):
 
 def sweep_model(model_name):
     y_true, y_prob, chosen_threshold = load_model_outputs(model_name)
-
     thresholds = sorted(set(DEFAULT_THRESHOLDS + [round(chosen_threshold, 2)]))
 
     rows = []
@@ -82,32 +82,49 @@ def sweep_model(model_name):
             "tn",
         ]
     ]
-
     return df
 
 
 def main():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    baseline_df = sweep_model("baseline")
-    gru_df = sweep_model("gru")
+    all_dfs = []
+    for model_name in MODELS:
+        df = sweep_model(model_name)
+        df.to_csv(OUT_DIR / f"{model_name}_threshold_sweep.csv", index=False)
+        all_dfs.append(df)
 
-    baseline_df.to_csv(OUT_DIR / "baseline_threshold_sweep.csv", index=False)
-    gru_df.to_csv(OUT_DIR / "gru_threshold_sweep.csv", index=False)
+        print(f"\n=== {model_name.upper()} THRESHOLD SWEEP ===")
+        print(df.to_string(index=False))
 
-    combined_df = pd.concat([baseline_df, gru_df], ignore_index=True)
+    combined_df = pd.concat(all_dfs, ignore_index=True)
     combined_df.to_csv(OUT_DIR / "threshold_sweep_comparison.csv", index=False)
 
-    print("\n=== BASELINE THRESHOLD SWEEP ===")
-    print(baseline_df.to_string(index=False))
+    summary_rows = []
+    for model_name in MODELS:
+        model_df = combined_df[combined_df["model"] == model_name].copy()
+        best_f1_row = model_df.sort_values("f1", ascending=False).iloc[0]
+        summary_rows.append(
+            {
+                "model": model_name,
+                "best_threshold_by_test_f1": float(best_f1_row["threshold"]),
+                "best_test_precision": float(best_f1_row["precision"]),
+                "best_test_recall": float(best_f1_row["recall"]),
+                "best_test_f1": float(best_f1_row["f1"]),
+            }
+        )
 
-    print("\n=== GRU THRESHOLD SWEEP ===")
-    print(gru_df.to_string(index=False))
+    summary_df = pd.DataFrame(summary_rows)
+    summary_df.to_csv(OUT_DIR / "threshold_sweep_best_f1_summary.csv", index=False)
+
+    print("\n=== BEST TEST F1 SUMMARY ===")
+    print(summary_df.to_string(index=False))
 
     print("\nSaved:")
-    print(OUT_DIR / "baseline_threshold_sweep.csv")
-    print(OUT_DIR / "gru_threshold_sweep.csv")
+    for model_name in MODELS:
+        print(OUT_DIR / f"{model_name}_threshold_sweep.csv")
     print(OUT_DIR / "threshold_sweep_comparison.csv")
+    print(OUT_DIR / "threshold_sweep_best_f1_summary.csv")
 
 
 if __name__ == "__main__":

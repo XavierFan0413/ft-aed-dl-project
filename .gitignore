@@ -10,6 +10,9 @@ data/processed/*
 !data/processed/.gitkeep
 *.csv
 
+# Npz files
+*.npz
+
 # OS / editor
 .DS_Store
 .vscode/
