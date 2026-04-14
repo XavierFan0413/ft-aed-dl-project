@@ -1,0 +1,14 @@
+{
+  "model": "gru",
+  "device": "cuda",
+  "checkpoint_epoch": 11,
+  "ap": 0.0006136059388494418,
+  "threshold": 0.81,
+  "precision": 0.0,
+  "recall": 0.0,
+  "f1": 0.0,
+  "tp": 0,
+  "tn": 186060,
+  "fp": 42,
+  "fn": 98
+}
