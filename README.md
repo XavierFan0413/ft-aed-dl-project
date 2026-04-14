@@ -14,10 +14,10 @@ This project is framed as imbalanced supervised time-series classification.
 
 ## Dataset
 
-Dataset page:
+Dataset page:  
 `https://acoursey3.github.io/ft-aed/`
 
-Dataset repository:
+Dataset repository:  
 `https://github.com/acoursey3/freeway-anomaly-data`
 
 Download the file `nashville_freeway_anomaly.csv` and place it at:
@@ -30,8 +30,8 @@ The dataset itself is not included in this repository.
 
 - `data/` — dataset notes, raw data folder, processed outputs
 - `notebooks/` — optional exploration notebooks
-- `src/` — preprocessing, training, and evaluation code
-- `results/` — saved model outputs, metrics, and plots
+- `src/` — preprocessing, training, evaluation, and analysis code
+- `results/` — saved model outputs, metrics, plots, and comparison tables
 - `docs/` — proposal and report-related materials
 
 ## Current implemented pipeline
@@ -43,6 +43,8 @@ The dataset itself is not included in this repository.
 - GRU sequence window construction
 - GRU training
 - saved weights, metrics, and plots for both models
+- reproducible saved-model evaluation without retraining
+- threshold sweep comparison for analysis
 
 ## Environment setup
 
@@ -104,19 +106,29 @@ This saves outputs under `results/gru/`, including:
 - `test_pr_curve.png`
 - `test_outputs.npz`
 
-## Reproduce saved results
-
-To reproduce evaluation metrics and PR curves from saved checkpoints without retraining:
+6. Reproduce saved results without retraining
 
 `python -m src.evaluate --model baseline`
 
 `python -m src.evaluate --model gru`
 
+This saves reproduced metrics and PR curves for each model.
+
+7. Run threshold sweep analysis
+
+`python src/threshold_sweep.py`
+
+This saves comparison files under `results/comparison/`, including:
+
+- `baseline_threshold_sweep.csv`
+- `gru_threshold_sweep.csv`
+- `threshold_sweep_comparison.csv`
+
 ## Current status
 
-The end-to-end project pipeline is working. Both the baseline MLP and the GRU model can be trained successfully, and both produce saved weights, metrics, and plots.
+The end-to-end project pipeline is working. Both the baseline MLP and the GRU model can be trained successfully, and both produce saved weights, metrics, and plots. Saved checkpoints can also be reloaded to reproduce the reported evaluation outputs without retraining.
 
-At the current stage, model performance is still modest. The dataset is highly imbalanced, and threshold selection is unstable because the anomaly class is extremely rare. This will be discussed further in the final report.
+Current model performance is still modest because the dataset is extremely imbalanced. The threshold sweep shows that the GRU does not clearly outperform the baseline on test AP, but it performs slightly better than the baseline at several moderate fixed thresholds. The validation-chosen threshold for the GRU is unstable and becomes too conservative on the test set, causing recall to collapse to zero. This behavior will be discussed further in the final report.
 
 ## Notes
 
