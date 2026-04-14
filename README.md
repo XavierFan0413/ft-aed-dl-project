@@ -1,6 +1,6 @@
 ﻿# FT-AED Deep Learning Project
 
-This project studies anomalous event detection on freeway sensor time series using the FT-AED dataset. The task is to predict rare anomalous events (`human_label`) from lane-level traffic measurements under severe class imbalance. The project is implemented in PyTorch and currently includes a baseline MLP and a GRU-based temporal model.
+This project studies anomalous event detection on freeway sensor time series using the FT-AED dataset. The task is to predict rare anomalous events (`human_label`) from lane-level traffic measurements under severe class imbalance. The project is implemented in PyTorch and currently includes four model variants: a baseline MLP, a GRU, a GRU with imbalance-aware sampling, and a TCN with imbalance-aware sampling.
 
 ## Task
 
@@ -9,7 +9,7 @@ This project is framed as imbalanced supervised time-series classification.
 - Primary target label: `human_label`
 - Split strategy: time-based split only
 - Baseline model: per-timestep MLP
-- Main model: GRU sequence classifier
+- Temporal models: GRU, GRU + sampler, TCN + sampler
 - Primary metrics: Precision, Recall, F1, PR-AUC
 
 ## Dataset
@@ -42,9 +42,11 @@ The dataset itself is not included in this repository.
 - baseline MLP training
 - GRU sequence window construction
 - GRU training
-- saved weights, metrics, and plots for both models
+- GRU training with weighted sampling for imbalance handling
+- TCN training with weighted sampling for imbalance handling
+- saved weights, metrics, and plots for all trained models
 - reproducible saved-model evaluation without retraining
-- threshold sweep comparison for analysis
+- threshold sweep comparison across multiple fixed thresholds
 
 ## Environment setup
 
@@ -79,9 +81,8 @@ This saves outputs under `results/baseline/`, including:
 - `loss_curve.png`
 - `val_ap_curve.png`
 - `test_pr_curve.png`
-- `test_outputs.npz`
 
-4. Build sequence windows for the GRU
+4. Build sequence windows for the temporal models
 
 `python src/data_loader.py`
 
@@ -92,29 +93,37 @@ This creates:
 - `data/processed/gru_test_w10.npz`
 - `data/processed/gru_metadata_w10.json`
 
-5. Train the GRU model
+5. Train the plain GRU model
 
 `python src/train_gru.py`
 
-This saves outputs under `results/gru/`, including:
+This saves outputs under `results/gru/`.
 
-- `best_model.pt`
-- `metrics.json`
-- `history.json`
-- `loss_curve.png`
-- `val_ap_curve.png`
-- `test_pr_curve.png`
-- `test_outputs.npz`
+6. Train the GRU with weighted sampling
 
-6. Reproduce saved results without retraining
+`python src/train_gru_sampler.py`
+
+This saves outputs under `results/gru_sampler/`.
+
+7. Train the TCN with weighted sampling
+
+`python src/train_tcn_sampler.py`
+
+This saves outputs under `results/tcn_sampler/`.
+
+8. Reproduce saved results without retraining
 
 `python -m src.evaluate --model baseline`
 
 `python -m src.evaluate --model gru`
 
+`python -m src.evaluate --model gru_sampler`
+
+`python -m src.evaluate --model tcn_sampler`
+
 This saves reproduced metrics and PR curves for each model.
 
-7. Run threshold sweep analysis
+9. Run threshold sweep analysis
 
 `python src/threshold_sweep.py`
 
@@ -122,17 +131,28 @@ This saves comparison files under `results/comparison/`, including:
 
 - `baseline_threshold_sweep.csv`
 - `gru_threshold_sweep.csv`
+- `gru_sampler_threshold_sweep.csv`
+- `tcn_sampler_threshold_sweep.csv`
 - `threshold_sweep_comparison.csv`
+- `threshold_sweep_best_f1_summary.csv`
 
 ## Current status
 
-The end-to-end project pipeline is working. Both the baseline MLP and the GRU model can be trained successfully, and both produce saved weights, metrics, and plots. Saved checkpoints can also be reloaded to reproduce the reported evaluation outputs without retraining.
+The end-to-end project pipeline is working. All implemented models can be trained successfully, and saved checkpoints can be reloaded to reproduce evaluation outputs without retraining.
 
-Current model performance is still modest because the dataset is extremely imbalanced. The threshold sweep shows that the GRU does not clearly outperform the baseline on test AP, but it performs slightly better than the baseline at several moderate fixed thresholds. The validation-chosen threshold for the GRU is unstable and becomes too conservative on the test set, causing recall to collapse to zero. This behavior will be discussed further in the final report.
+The project now includes four model variants with different tradeoffs:
+
+- The baseline MLP provides a simple per-timestep reference point.
+- The plain GRU adds temporal context but shows unstable threshold behavior at the validation-chosen threshold.
+- The GRU with weighted sampling improves recall and gives the best thresholded F1 among the current variants.
+- The TCN with weighted sampling gives the strongest test AP among the current variants.
+
+Overall performance is still modest in absolute terms because the dataset is extremely imbalanced and operating-threshold selection is unstable. However, the experiments now provide a clearer comparison of how temporal modeling and imbalance handling affect anomaly detection behavior.
 
 ## Notes
 
 - Framework used: PyTorch
 - Main reported label: `human_label`
 - The dataset is excluded from the repository and should be downloaded separately
-- Final deliverables will include the report, code, saved outputs, and reproducibility instructions
+- Generated `.npz` artifacts are not tracked in git
+- Final deliverables include the report, code, saved outputs, and reproducibility instructions
