@@ -161,6 +161,11 @@ def main():
         required=True,
         help="Which saved model to evaluate.",
     )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        help="Where to write evaluation outputs (default: results/<model>).",
+    )
     args = parser.parse_args()
 
     if args.model == "baseline":
@@ -188,7 +193,7 @@ def main():
     ap = average_precision_score(y_test, y_prob)
     threshold_metrics = metrics_at_threshold(y_test, y_prob, threshold)
 
-    out_dir = RESULTS_DIR / model_name
+    out_dir = args.output_dir if args.output_dir is not None else RESULTS_DIR / model_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
     reproduced_metrics = {

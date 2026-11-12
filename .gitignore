@@ -13,6 +13,9 @@ data/processed/*
 # Npz files
 *.npz
 
+# Saved-checkpoint evaluation outputs
+/reproduced/
+
 # OS / editor
 .DS_Store
 .vscode/

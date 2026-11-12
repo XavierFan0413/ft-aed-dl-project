@@ -1,158 +1,79 @@
-﻿# FT-AED Deep Learning Project
+# FT-AED: Freeway Anomaly Detection
 
-This project studies anomalous event detection on freeway sensor time series using the FT-AED dataset. The task is to predict rare anomalous events (`human_label`) from lane-level traffic measurements under severe class imbalance. The project is implemented in PyTorch and currently includes four model variants: a baseline MLP, a GRU, a GRU with imbalance-aware sampling, and a TCN with imbalance-aware sampling.
+Can lane-level freeway sensor readings identify rare traffic anomalies? This PyTorch project compares a per-timestep MLP with three temporal configurations on FT-AED, using chronological train, validation, and test splits. The held-out days contain 98 positives in both the 188,160-reading and 186,200-window test sets.
 
-## Task
+## Held-out test results
 
-This project is framed as imbalanced supervised time-series classification.
+| Configuration | Test AP | Validation cutoff | Test F1 at that cutoff |
+| --- | ---: | ---: | ---: |
+| [MLP baseline](results/baseline/metrics.json) | 0.000621 | 0.59 | 0.001109 |
+| [GRU](results/gru/metrics.json) | 0.000614 | 0.81 | 0.000000 |
+| [GRU + weighted sampling](results/gru_sampler/metrics.json) | 0.000578 | 0.99 | **0.001175** |
+| [TCN + weighted sampling](results/tcn_sampler/metrics.json) | **0.000891** | 0.99 | 0.001143 |
 
-- Primary target label: `human_label`
-- Split strategy: time-based split only
-- Baseline model: per-timestep MLP
-- Temporal models: GRU, GRU + sampler, TCN + sampler
-- Primary metrics: Precision, Recall, F1, PR-AUC
+AP is scikit-learn average precision, a recall-weighted summary of precision across test-score cutoffs. For each saved checkpoint, the cutoff that maximized validation F1 on the 0.01–0.99 grid was applied to the test scores to report test F1. The weighted TCN leads on AP and the weighted GRU leads on F1 at the validation-selected cutoffs.
 
-## Dataset
+[Final report](docs/ft_aed_dl_report_final.pdf) · [Presentation](docs/Deep_Learning_Project_Presentation.pdf) · [Validation AP curves](results/final_figures/figure1_val_ap_grid.png) · [Exploratory threshold sweep](#exploratory-test-threshold-sweep)
 
-Dataset page:  
-`https://acoursey3.github.io/ft-aed/`
+## Reproduce the saved MLP checkpoint
 
-Dataset repository:  
-`https://github.com/acoursey3/freeway-anomaly-data`
+Download the [FT-AED CSV](https://github.com/acoursey3/freeway-anomaly-data/blob/main/nashville_freeway_anomaly.csv) from the upstream GitHub file page. Use its download control to get the Git LFS file and save it as `data/raw/nashville_freeway_anomaly.csv`. From the repository root, in a Python environment, run:
 
-Download the file `nashville_freeway_anomaly.csv` and place it at:
+```bash
+python -m pip install -r requirements.txt
+python src/preprocess.py
+python -m src.evaluate --model baseline --output-dir reproduced/baseline
+```
 
-`data/raw/nashville_freeway_anomaly.csv`
+The checkpoint is included in the repository. The command writes metrics, a precision–recall plot, and predictions to `reproduced/baseline/`.
 
-The dataset itself is not included in this repository.
+### Reproduce the temporal checkpoints
 
-## Repository structure
+Use the same CSV and dependencies. The loader builds 10-step windows for the three temporal configurations.
 
-- `data/` — dataset notes, raw data folder, processed outputs
-- `notebooks/` — optional exploration notebooks
-- `src/` — preprocessing, training, evaluation, and analysis code
-- `results/` — saved model outputs, metrics, plots, and comparison tables
-- `docs/` — proposal and report-related materials
+```bash
+python src/data_loader.py
+python -m src.evaluate --model gru --output-dir reproduced/gru
+python -m src.evaluate --model gru_sampler --output-dir reproduced/gru_sampler
+python -m src.evaluate --model tcn_sampler --output-dir reproduced/tcn_sampler
+```
 
-## Current implemented pipeline
+Evaluation uses CUDA when available and also supports CPU. Each run produces `reproduced_metrics.json`, `reproduced_test_pr_curve.png`, and `reproduced_test_outputs.npz` in its output directory.
 
-- dataset inspection
-- time-based train / validation / test split
-- baseline feature preprocessing
-- baseline MLP training
-- GRU sequence window construction
-- GRU training
-- GRU training with weighted sampling for imbalance handling
-- TCN training with weighted sampling for imbalance handling
-- saved weights, metrics, and plots for all trained models
-- reproducible saved-model evaluation without retraining
-- threshold sweep comparison across multiple fixed thresholds
+## Exploratory test threshold sweep
 
-## Environment setup
+The [threshold-sweep figure](results/final_figures/figure2_threshold_vs_f1.png) plots F1 on the **test set** at cutoffs from 0.10 through 0.90 in steps of 0.10, plus each model's validation-selected cutoff. The maxima below were selected after inspecting test F1. They describe sensitivity to the cutoff, and the held-out comparison above uses the validation-selected cutoffs.
 
-Install dependencies with:
+| Configuration | Cutoff with highest F1 in test sweep | Highest F1 in test sweep |
+| --- | ---: | ---: |
+| MLP baseline | 0.70 | 0.001527 |
+| GRU | 0.30 | 0.001311 |
+| GRU + weighted sampling | 0.80 | 0.001390 |
+| TCN + weighted sampling | 0.50 | 0.001344 |
 
-`pip install -r requirements.txt`
+To regenerate the sweep, copy each `reproduced/<model>/reproduced_test_outputs.npz` into its matching `results/<model>/` directory. Then run:
 
-## How to run
+```bash
+python src/threshold_sweep.py
+python src/make_figure2_threshold_plot.py
+```
 
-1. Inspect the dataset schema and label distribution
+The sweep writes CSVs under `results/comparison/`, including `threshold_sweep_comparison.csv` and `threshold_sweep_best_f1_summary.csv`. The plotting command rewrites the tracked threshold-sweep figure.
 
-`python src/inspect_ftaed.py`
+## Data and training
 
-2. Preprocess flat features for the baseline model
+The [FT-AED dataset page](https://acoursey3.github.io/ft-aed/) describes the traffic measurements and annotations. The target is `human_label`. The MLP scores individual readings and the GRU and TCN score 10-step windows from the same held-out days. The raw CSV and generated data files are kept outside version control.
 
-`python src/preprocess.py`
+To train from scratch after downloading the dataset, run the following from the repository root. Training writes to `results/<model>/`, including the checkpoints and metrics, so use a separate checkout to keep a copy of the saved artifacts.
 
-This creates:
+```bash
+python src/inspect_ftaed.py
+python src/preprocess.py
+python src/train_baseline.py
+python src/data_loader.py
+python src/train_gru.py
+python src/train_gru_sampler.py
+python src/train_tcn_sampler.py
+```
 
-- `data/processed/baseline_data.npz`
-- `data/processed/baseline_metadata.json`
-
-3. Train the baseline MLP
-
-`python src/train_baseline.py`
-
-This saves outputs under `results/baseline/`, including:
-
-- `best_model.pt`
-- `metrics.json`
-- `history.json`
-- `loss_curve.png`
-- `val_ap_curve.png`
-- `test_pr_curve.png`
-
-4. Build sequence windows for the temporal models
-
-`python src/data_loader.py`
-
-This creates:
-
-- `data/processed/gru_train_w10.npz`
-- `data/processed/gru_val_w10.npz`
-- `data/processed/gru_test_w10.npz`
-- `data/processed/gru_metadata_w10.json`
-
-5. Train the plain GRU model
-
-`python src/train_gru.py`
-
-This saves outputs under `results/gru/`.
-
-6. Train the GRU with weighted sampling
-
-`python src/train_gru_sampler.py`
-
-This saves outputs under `results/gru_sampler/`.
-
-7. Train the TCN with weighted sampling
-
-`python src/train_tcn_sampler.py`
-
-This saves outputs under `results/tcn_sampler/`.
-
-8. Reproduce saved results without retraining
-
-`python -m src.evaluate --model baseline`
-
-`python -m src.evaluate --model gru`
-
-`python -m src.evaluate --model gru_sampler`
-
-`python -m src.evaluate --model tcn_sampler`
-
-This saves reproduced metrics and PR curves for each model.
-
-9. Run threshold sweep analysis
-
-`python src/threshold_sweep.py`
-
-This saves comparison files under `results/comparison/`, including:
-
-- `baseline_threshold_sweep.csv`
-- `gru_threshold_sweep.csv`
-- `gru_sampler_threshold_sweep.csv`
-- `tcn_sampler_threshold_sweep.csv`
-- `threshold_sweep_comparison.csv`
-- `threshold_sweep_best_f1_summary.csv`
-
-## Current status
-
-The end-to-end project pipeline is working. All implemented models can be trained successfully, and saved checkpoints can be reloaded to reproduce evaluation outputs without retraining.
-
-The project now includes four model variants with different tradeoffs:
-
-- The baseline MLP provides a simple per-timestep reference point.
-- The plain GRU adds temporal context but shows unstable threshold behavior at the validation-chosen threshold.
-- The GRU with weighted sampling improves recall and gives the best thresholded F1 among the current variants.
-- The TCN with weighted sampling gives the strongest test AP among the current variants.
-
-Overall performance is still modest in absolute terms because the dataset is extremely imbalanced and operating-threshold selection is unstable. However, the experiments now provide a clearer comparison of how temporal modeling and imbalance handling affect anomaly detection behavior.
-
-## Notes
-
-- Framework used: PyTorch
-- Main reported label: `human_label`
-- The dataset is excluded from the repository and should be downloaded separately
-- Generated `.npz` artifacts are not tracked in git
-- Final deliverables include the report, code, saved outputs, and reproducibility instructions
+The training scripts save validation histories, loss and AP curves, and test precision–recall plots. To rebuild the [validation AP grid](results/final_figures/figure1_val_ap_grid.png) from those curves, run `python src/make_figure1_grid.py`.
